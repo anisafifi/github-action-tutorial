@@ -2,7 +2,7 @@
  * Unit tests for utility functions
  */
 
-import { add, subtract, multiply, divide, capitalizeString } from '../utils';
+import { add, subtract, multiply, divide, capitalizeString } from '../utils.js';
 
 describe('Utility Functions', () => {
   describe('add', () => {

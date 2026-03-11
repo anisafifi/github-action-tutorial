@@ -3,7 +3,7 @@
  */
 
 import express, { Express, Request, Response } from 'express';
-import { add, subtract, multiply, divide, capitalizeString } from './utils';
+import { add, subtract, multiply, divide, capitalizeString } from './utils.js';
 
 const app: Express = express();
 const PORT: number = parseInt(process.env.PORT || '3000', 10);
