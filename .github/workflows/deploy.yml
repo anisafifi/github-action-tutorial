@@ -68,4 +68,4 @@ jobs:
 
             docker login ghcr.io -u "$GHCR_USERNAME" -p "$GHCR_TOKEN"
             docker compose -f docker-compose.yml pull
-            docker compose -f docker-compose.yml up -d --remove-orphans
+            docker compose -f docker-compose.yml up -d --remove-orphans 
