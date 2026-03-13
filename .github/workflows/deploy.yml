@@ -1,0 +1,70 @@
+name: Deploy to Remote Server
+
+on:
+  workflow_run:
+    workflows: ["Publish Docker Image"]
+    branches: [master, main]
+    types:
+      - completed
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-latest
+    environment: production
+    
+    env:
+      IMAGE_NAME: ghcr.io/${{ github.repository }}:latest
+      CONTAINER_NAME: github-action-app
+      HOST_PORT: 3000
+      CONTAINER_PORT: 3000
+      GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+      GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+      DEPLOY_PATH: /opt/github-action-app
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Prepare remote deploy directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          envs: DEPLOY_PATH
+          script: |
+            set -e
+            mkdir -p "$DEPLOY_PATH"
+
+      - name: Upload docker compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: docker-compose.yml
+          target: ${{ env.DEPLOY_PATH }}
+
+      - name: Deploy with Docker Compose over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true
+          envs: IMAGE_NAME,CONTAINER_NAME,HOST_PORT,CONTAINER_PORT,GHCR_USERNAME,GHCR_TOKEN,DEPLOY_PATH
+          script: |
+            set -e
+            cd "$DEPLOY_PATH"
+
+            docker login ghcr.io -u "$GHCR_USERNAME" -p "$GHCR_TOKEN"
+            docker compose -f docker-compose.yml pull
+            docker compose -f docker-compose.yml up -d --remove-orphans
