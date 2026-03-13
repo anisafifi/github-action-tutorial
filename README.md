@@ -24,7 +24,11 @@ A comprehensive Node.js application demonstrating GitHub Actions CI/CD workflows
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml             # CI/CD workflow (test & coverage)
-│       └── lint.yml           # Linting workflow (ESLint & type-check)
+│       ├── lint.yml           # Linting workflow (ESLint & type-check)
+│       ├── publish.yml        # Build & push Docker image to GHCR
+│       └── deploy.yml         # Deploy to remote server via SSH
+├── Dockerfile                 # Multi-stage Docker build
+├── docker-compose.yml         # Docker Compose for production deployment
 ├── tsconfig.json              # TypeScript configuration
 ├── jest.config.js             # Jest configuration for TypeScript & ESM
 ├── .eslintrc.json             # ESLint rules
@@ -106,19 +110,62 @@ The server runs on `http://localhost:3000` by default (configurable via `PORT` e
 
 ## GitHub Actions Workflows
 
-### CI Workflow (ci.yml)
-Runs on push and pull requests to `main` and `development` branches:
+The project uses a chained CI/CD pipeline triggered automatically on every push to `main`/`master`:
+
+```
+Push → CI (test) → Publish Docker Image → Deploy to Remote Server
+```
+
+### CI Workflow (`ci.yml`)
+Runs on push and pull requests to `main`, `master`, and `development` branches:
 - Installs dependencies
 - Builds the project
-- Runs all tests
+- Runs all tests across Node.js 18.x, 20.x, and 22.x
 - Generates coverage report
 - Uploads coverage to Codecov
 
-### Lint Workflow (lint.yml)
-Checks code quality:
+### Lint Workflow (`lint.yml`)
+Checks code quality on push and pull requests:
 - Runs ESLint
 - Performs type checking
 - Validates TypeScript compilation
+
+### Publish Docker Image Workflow (`publish.yml`)
+Triggered automatically after CI succeeds on `main`/`master`:
+- Builds a Docker image from the `Dockerfile`
+- Pushes it to GitHub Container Registry (GHCR) tagged as `latest` and the short commit SHA
+
+### Deploy to Remote Server Workflow (`deploy.yml`)
+Triggered automatically after the Publish workflow succeeds on `main`/`master`:
+- Connects to the remote server via SSH
+- Uploads the `docker-compose.yml` file
+- Pulls the freshly published image from GHCR
+- Restarts the container with `docker compose up -d`
+
+#### Required Secrets
+
+Configure the following secrets in **Settings → Secrets and variables → Actions**:
+
+| Secret | Description |
+|---|---|
+| `SSH_HOST` | IP address or hostname of the remote server |
+| `SSH_USER` | SSH username on the remote server |
+| `SSH_PRIVATE_KEY` | Private SSH key used to authenticate with the server |
+| `GHCR_USERNAME` | GitHub username for pulling from GHCR on the server |
+| `GHCR_TOKEN` | GitHub Personal Access Token with `read:packages` scope |
+
+#### Setting Up the Production Environment & the "Review Deployments" Button
+
+The deploy workflow references a GitHub **Environment** named `production`. When this environment is configured with **required reviewers**, GitHub pauses the deployment and shows a **"Review deployments"** button that lets designated reviewers approve or reject each release before it reaches the server.
+
+To configure it:
+
+1. Go to your repository → **Settings** → **Environments**.
+2. Click **New environment**, name it `production`, and click **Configure environment**.
+3. Under **Deployment protection rules**, enable **Required reviewers** and add the GitHub users or teams who should approve deployments.
+4. Click **Save protection rules**.
+
+The next time the deploy workflow runs, it will pause at the `deploy` job and the reviewers will see a **"Review deployments"** button at the top of the workflow run page to approve or reject the deployment.
 
 ## Testing
 
@@ -208,6 +255,9 @@ The project uses strict TypeScript settings:
 3. **Conditional Steps** - Coverage upload with error handling
 4. **Auto-cleanup** - Temporary files handled properly
 5. **Status Checks** - Required for PR merges
+6. **Chained Workflows** - `workflow_run` trigger chains CI → Publish → Deploy
+7. **Environment Protection Rules** - Required reviewers gate production deployments
+8. **Docker Integration** - Build, push, and deploy a containerised application
 
 ## Best Practices Implemented
 
